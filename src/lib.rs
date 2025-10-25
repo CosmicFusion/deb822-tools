@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use deb822_lossless::Deb822;
 use std::fs::File;
+use std::path::PathBuf;
 
 use std::io::Write;
 
@@ -34,56 +34,69 @@ pub struct Deb822Repository {
 }
 
 impl Deb822Repository {
-    pub fn fn_new_from_file(file_path: PathBuf) -> Deb822Repository {
-        let deb822 = Deb822::from_file(&file_path).unwrap();
-        let paragraph = deb822.paragraphs().nth(0).unwrap();
-        let final_struct = Deb822Repository {
-            filepath: file_path.to_string_lossy().to_string(),
-            enabled: paragraph.get("Enabled"),
-            types: paragraph.get("Types"),
-            uris: paragraph.get("URIs"),
-            suites: paragraph.get("Suites"),
-            components: paragraph.get("Components"),
-            architectures: paragraph.get("Architectures"),
-            languages: paragraph.get("Languages"),
-            targets: paragraph.get("Targets"),
-            pdiffs: paragraph.get("PDiffs"),
-            by_hash: paragraph.get("By-Hash"),
-            allow_insecure: paragraph.get("Allow-Insecure"),
-            allow_weak: paragraph.get("Allow-Weak"),
-            allow_downgrade_to_insecure: paragraph.get("Downgrade-To-Insecure"),
-            trusted: paragraph.get("Trusted"),
-            signed_by: paragraph.get("Signed-By"),
-            check_valid_until: paragraph.get("Check-Valid-Until"),
-            valid_until_min:  paragraph.get("Valid-Until-Min"),
-            check_date: paragraph.get("Check-Date"),
-            date_max_future:  paragraph.get("Date-Max-Future"),
-            inrelease_path:  paragraph.get("InRelease-Path"),
-            snapshot: paragraph.get("Snapshot"),
-            repolib_name: paragraph.get("X-Repolib-Name"),
-            repolib_id: paragraph.get("X-Repolib-ID"),
-            repolib_default_mirror: paragraph.get("X-Repolib-Default-Mirror")
-        };
-        final_struct
-    }
-    
-    pub fn get_deb822_sources() -> std::io::Result<Vec<Self>> {
-        let mut sources_vec = Vec::new();
-        let sources_paths = std::fs::read_dir("/etc/apt/sources.list.d")?
-            .filter_map(|res| res.ok())
-            .map(|dir_entry| dir_entry.path())
-            .filter_map(|path| {
-                if path.extension().map_or(false, |ext| ext == "sources") {
-                    Some(path)
-                } else {
-                    None
+    pub fn fn_new_from_file(file_path: PathBuf) -> Option<Self> {
+        match Deb822::from_file(&file_path) {
+            Ok(deb822) => match deb822.paragraphs().nth(0) {
+                Some(paragraph) => {
+                    return Some(Deb822Repository {
+                        filepath: file_path.to_string_lossy().to_string(),
+                        enabled: paragraph.get("Enabled"),
+                        types: paragraph.get("Types"),
+                        uris: paragraph.get("URIs"),
+                        suites: paragraph.get("Suites"),
+                        components: paragraph.get("Components"),
+                        architectures: paragraph.get("Architectures"),
+                        languages: paragraph.get("Languages"),
+                        targets: paragraph.get("Targets"),
+                        pdiffs: paragraph.get("PDiffs"),
+                        by_hash: paragraph.get("By-Hash"),
+                        allow_insecure: paragraph.get("Allow-Insecure"),
+                        allow_weak: paragraph.get("Allow-Weak"),
+                        allow_downgrade_to_insecure: paragraph.get("Downgrade-To-Insecure"),
+                        trusted: paragraph.get("Trusted"),
+                        signed_by: paragraph.get("Signed-By"),
+                        check_valid_until: paragraph.get("Check-Valid-Until"),
+                        valid_until_min: paragraph.get("Valid-Until-Min"),
+                        check_date: paragraph.get("Check-Date"),
+                        date_max_future: paragraph.get("Date-Max-Future"),
+                        inrelease_path: paragraph.get("InRelease-Path"),
+                        snapshot: paragraph.get("Snapshot"),
+                        repolib_name: paragraph.get("X-Repolib-Name"),
+                        repolib_id: paragraph.get("X-Repolib-ID"),
+                        repolib_default_mirror: paragraph.get("X-Repolib-Default-Mirror"),
+                    });
                 }
-            })
-            .collect::<Vec<_>>();
-        for source_path in sources_paths {
-            sources_vec.push(Self::fn_new_from_file(source_path));
+                None => return None,
+            },
+            Err(_) => return None,
         }
-        Ok(sources_vec)
+    }
+
+    pub fn get_deb822_sources() -> Vec<Self> {
+        let mut sources_vec = Vec::new();
+        match std::fs::read_dir("/etc/apt/sources.list.d") {
+            Ok(sources_paths_rd) => {
+                let sources_paths = sources_paths_rd
+                    .filter_map(|res| res.ok())
+                    .map(|dir_entry| dir_entry.path())
+                    .filter_map(|path| {
+                        if path.extension().map_or(false, |ext| ext == "sources") {
+                            Some(path)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                for source_path in sources_paths {
+                    match Self::fn_new_from_file(source_path) {
+                        Some(repository) => sources_vec.push(repository),
+                        None => (),
+                    }
+                }
+                return sources_vec;
+            }
+            Err(_) => return Vec::new(),
+        }
     }
 
     pub fn write_to_file(self, file_path: PathBuf) -> std::io::Result<()> {
